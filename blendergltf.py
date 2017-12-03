@@ -30,7 +30,7 @@ DEFAULT_SETTINGS = {
     'meshes_apply_modifiers': True,
     'meshes_interleave_vertex_data': True,
     'images_data_storage': 'COPY',
-    'asset_version': '1.0',
+    'asset_version': '2.0',
     'asset_profile': 'WEB',
     'images_allow_srgb': False,
     'extension_exporters': [],
@@ -463,10 +463,11 @@ def export_camera(_, camera):
             'type': 'orthographic',
         }
     else:
+        angle_y = camera.angle_y if camera.angle_y != 0.0 else 1e-6
         camera_gltf = {
             'perspective': {
-                'aspectRatio': camera.angle_x / camera.angle_y,
-                'yfov': camera.angle_y,
+                'aspectRatio': camera.angle_x / angle_y,
+                'yfov': angle_y,
                 'zfar': camera.clip_end,
                 'znear': camera.clip_start,
             },
@@ -609,13 +610,13 @@ def export_attributes(state, mesh, vert_list, base_vert_list):
     else:
         prop_buffer = Buffer(mesh.name + '_POSITION')
         state['buffers'].append(prop_buffer)
-        state['input']['buffers'].append(SimpleID(buf.name))
+        state['input']['buffers'].append(SimpleID(prop_buffer.name))
         prop_view = prop_buffer.add_view(12 * num_verts, 12, Buffer.ARRAY_BUFFER)
         vdata = prop_buffer.add_accessor(prop_view, 0, 12, Buffer.FLOAT, num_verts, Buffer.VEC3)
 
         prop_buffer = Buffer(mesh.name + '_NORMAL')
         state['buffers'].append(prop_buffer)
-        state['input']['buffers'].append(SimpleID(buf.name))
+        state['input']['buffers'].append(SimpleID(prop_buffer.name))
         prop_view = prop_buffer.add_view(12 * num_verts, 12, Buffer.ARRAY_BUFFER)
         ndata = prop_buffer.add_accessor(prop_view, 0, 12, Buffer.FLOAT, num_verts, Buffer.VEC3)
 
@@ -624,7 +625,7 @@ def export_attributes(state, mesh, vert_list, base_vert_list):
             for uv_layer in range(num_uv_layers):
                 prop_buffer = Buffer('{}_TEXCOORD_{}'.format(mesh.name, uv_layer))
                 state['buffers'].append(prop_buffer)
-                state['input']['buffers'].append(SimpleID(buf.name))
+                state['input']['buffers'].append(SimpleID(prop_buffer.name))
                 prop_view = prop_buffer.add_view(8 * num_verts, 8, Buffer.ARRAY_BUFFER)
                 tdata.append(
                     prop_buffer.add_accessor(prop_view, 0, 8, Buffer.FLOAT, num_verts, Buffer.VEC2)
@@ -633,10 +634,10 @@ def export_attributes(state, mesh, vert_list, base_vert_list):
             for col_layer in range(num_col_layers):
                 prop_buffer = Buffer('{}_COLOR_{}'.format(mesh.name, col_layer))
                 state['buffers'].append(prop_buffer)
-                state['input']['buffers'].append(SimpleID(buf.name))
+                state['input']['buffers'].append(SimpleID(prop_buffer.name))
                 prop_view = prop_buffer.add_view(12 * num_verts, 12, Buffer.ARRAY_BUFFER)
                 cdata.append(
-                    prop_buffer.add_accessor(prop_view, 0, 12, Buffer.FLOAT, num_verts, Buffer.VEC2)
+                    prop_buffer.add_accessor(prop_view, 0, 12, Buffer.FLOAT, num_verts, Buffer.VEC3)
                 )
 
     # Copy vertex data
