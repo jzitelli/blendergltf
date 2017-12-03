@@ -3,7 +3,10 @@ from distutils.version import StrictVersion as Version
 import json
 import os
 import time
+from itertools import chain
 
+import numpy as np
+import mathutils
 import bpy
 from bpy.props import (
     BoolProperty,
@@ -69,7 +72,21 @@ ANIM_EXPORT_ITEMS = (
     ('ACTIVE', 'Active Only', 'Export the active action per object'),
     ('ELIGIBLE', 'All Eligible', 'Export all actions that can be used by an object'),
 )
-
+_DEFAULT_VALUES_BY_PARAM_TYPE = {
+    5124 : 1, # GL_INT
+    5126 : 1.0, # GL_FLOAT
+    35664: (1.0, 1.0), # GL_FLOAT_VEC2
+    35665: (1.0, 1.0, 1.0), # GL_FLOAT_VEC3
+    35666: (1.0, 1.0, 1.0, 1.0), # GL_FLOAT_VEC4
+    35674: (1.0, 0.0, 0.0, 1.0), # GL_FLOAT_MAT2
+    35675: (1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0), # GL_FLOAT_MAT3
+    35676: (1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0, 1.0), # GL_FLOAT_MAT4
+}
 
 class ExtPropertyGroup(bpy.types.PropertyGroup):
     name = StringProperty(name='Extension Name')
@@ -465,6 +482,32 @@ class ExportGLTF(bpy.types.Operator, ExportHelper, GLTFOrientationHelper):
 
         start_time = time.perf_counter()
         gltf = export_gltf(data, settings)
+
+        if settings['nodes_global_matrix'] != mathutils.Matrix.Identity(4):
+            _matrix = np.array(list(chain.from_iterable([[v[0], v[1], v[2], v[3]]
+                                                         for v in settings['nodes_global_matrix'][:]])), dtype=np.float32)
+            # _matrix = list(chain.from_iterable([[v[0], v[1], v[2]]
+            #                                    for v in settings['nodes_global_matrix'][:3]]))
+            #matrix = np.eye(4, dtype=np.float32)
+            #matrix[:3,:3] = np.array(_matrix).reshape(3,3)
+            matrix = tuple(_matrix.ravel())
+            # matrix = list(np.array(chain.from_iterable([[v[0], v[1], v[2], v[3]]
+            #                                             for v in settings['nodes_global_matrix'][:]])).reshape(4,4).T.ravel())
+            print(matrix)
+            for scene_id, scene in gltf['scenes'].items():
+                root_node = {'children': scene['nodes'],
+                             'matrix': matrix}
+                root_node_id = '%s_root' % scene_id
+                gltf['nodes'][root_node_id] = root_node
+                scene['nodes'] = [root_node_id]
+
+        if gltf['scenes']:
+            gltf['scene'] = sorted(gltf['scenes'].keys())[0]
+
+        for technique in gltf['techniques'].values():
+            for parameter in technique['parameters'].values():
+                if 'value' in parameter and parameter['value'] is None:
+                    parameter['value'] = _DEFAULT_VALUES_BY_PARAM_TYPE[parameter['type']]
         end_time = time.perf_counter()
         print('Export took {:.4} seconds'.format(end_time - start_time))
 
@@ -472,11 +515,14 @@ class ExportGLTF(bpy.types.Operator, ExportHelper, GLTFOrientationHelper):
             with open(self.filepath, 'wb') as fout:
                 fout.write(gltf)
         else:
+            with open(self.filepath + '.raw', 'w') as f:
+                f.write('\n'.join('%s: %s' % (k, v) for k, v in gltf.items()))
             with open(self.filepath, 'w') as fout:
                 # Figure out indentation
                 indent = 4 if self.pretty_print else None
 
                 # Dump the JSON
+
                 json.dump(gltf, fout, indent=indent, sort_keys=True, check_circular=False)
 
                 if self.pretty_print:

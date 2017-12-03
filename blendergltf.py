@@ -1818,24 +1818,10 @@ def export_gltf(scene_delta, settings=None):
     state['input']['objects'].extend(state['input']['dupli_ids'])
     state['input']['dupli_ids'] = []
 
-    # Export default scene
-    default_scene = None
-    for scene in state['input']['scenes']:
-        if scene == bpy.context.scene:
-            default_scene = scene
-    if default_scene:
-        scene_ref = Reference('scenes', bpy.context.scene.name, gltf, 'scene')
-        scene_ref.value = 0
-        state['references'].append(scene_ref)
-
     # Export extensions
     state['refmap'] = build_int_refmap(state['input'])
     for ext_exporter in settings['extension_exporters']:
         ext_exporter.export(state)
-
-    # Insert root nodes if axis conversion is needed
-    if settings['nodes_global_matrix'] != mathutils.Matrix.Identity(4):
-        insert_root_nodes(state, togl(settings['nodes_global_matrix']))
 
     state['output'].update(export_buffers(state))
     state['output'] = {key: value for key, value in state['output'].items() if value != []}
