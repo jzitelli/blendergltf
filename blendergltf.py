@@ -1294,7 +1294,7 @@ def check_texture(texture):
 def export_texture(state, texture):
     # Generate sampler for this texture
     gltf_sampler = {
-        'name': texture.name,
+        'name': texture.name.replace('texture_', 'textures_'),
     }
 
     # Handle wrapS and wrapT

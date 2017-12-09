@@ -21,7 +21,7 @@ from bpy_extras.io_utils import (
     axis_conversion,
 )
 
-from .blendergltf import export_gltf
+from .blendergltf import export_gltf, togl
 from .filters import visible_only, selected_only, used_only
 from . import extension_exporters
 from .pbr_utils import PbrExportPanel, PbrSettings
@@ -484,30 +484,29 @@ class ExportGLTF(bpy.types.Operator, ExportHelper, GLTFOrientationHelper):
         gltf = export_gltf(data, settings)
 
         if settings['nodes_global_matrix'] != mathutils.Matrix.Identity(4):
-            _matrix = np.array(list(chain.from_iterable([[v[0], v[1], v[2], v[3]]
-                                                         for v in settings['nodes_global_matrix'][:]])), dtype=np.float32)
-            # _matrix = list(chain.from_iterable([[v[0], v[1], v[2]]
-            #                                    for v in settings['nodes_global_matrix'][:3]]))
-            #matrix = np.eye(4, dtype=np.float32)
-            #matrix[:3,:3] = np.array(_matrix).reshape(3,3)
-            matrix = tuple(_matrix.ravel())
-            # matrix = list(np.array(chain.from_iterable([[v[0], v[1], v[2], v[3]]
-            #                                             for v in settings['nodes_global_matrix'][:]])).reshape(4,4).T.ravel())
-            print(matrix)
             for scene_id, scene in gltf['scenes'].items():
-                root_node = {'children': scene['nodes'],
-                             'matrix': matrix}
-                root_node_id = '%s_root' % scene_id
-                gltf['nodes'][root_node_id] = root_node
-                scene['nodes'] = [root_node_id]
+                node_id = '%s__nodes_global_matrix' % scene_id
+                gltf['nodes'][node_id] = {'matrix': list(np.array([float(v)
+                                                                   for row in settings['nodes_global_matrix']
+                                                                   for v in row]).reshape(4,4).T.ravel()),
+                                          'children': [n for n in scene['nodes']]}
+                scene['nodes'] = [node_id]
 
         if gltf['scenes']:
             gltf['scene'] = sorted(gltf['scenes'].keys())[0]
+
+        for mat in gltf['materials'].values():
+            for k, v in mat.get('values', {}).items():
+                try:
+                    mat['values'][k] = v.replace('texture_', 'textures_')
+                except:
+                    pass
 
         for technique in gltf['techniques'].values():
             for parameter in technique['parameters'].values():
                 if 'value' in parameter and parameter['value'] is None:
                     parameter['value'] = _DEFAULT_VALUES_BY_PARAM_TYPE[parameter['type']]
+
         end_time = time.perf_counter()
         print('Export took {:.4} seconds'.format(end_time - start_time))
 
